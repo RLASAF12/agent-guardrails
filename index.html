@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentAmb — What Does Your AI Agent Actually Hear?</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --catastrophic: #ef4444;
+    --high: #f97316;
+    --medium: #eab308;
+    --low: #3b82f6;
+    --safe: #22c55e;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Header */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-name { font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+  .logo-tag { color: var(--muted); font-size: 13px; }
+  .badge-kiro {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--catastrophic);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 60px 32px 40px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--catastrophic); }
+  .hero p {
+    color: var(--muted);
+    font-size: 18px;
+    max-width: 560px;
+    margin: 0 auto 32px;
+  }
+  .kiro-banner {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-left: 4px solid var(--catastrophic);
+    border-radius: 8px;
+    padding: 16px 20px;
+    text-align: left;
+    margin-bottom: 40px;
+  }
+  .kiro-banner .kiro-label {
+    color: var(--catastrophic);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .kiro-banner .kiro-text {
+    font-size: 15px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .kiro-banner .kiro-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .kiro-banner strong { color: var(--catastrophic); }
+
+  /* Input area */
+  .input-area {
+    max-width: 760px;
+    margin: 0 auto 60px;
+    padding: 0 32px;
+  }
+  .input-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .input-row {
+    display: flex;
+    gap: 8px;
+  }
+  .instruction-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  .instruction-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .instruction-input::placeholder { color: var(--muted); }
+  .analyze-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .analyze-btn:hover { background: #5558e8; transform: translateY(-1px); }
+  .analyze-btn:active { transform: translateY(0); }
+  .analyze-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+  /* Quick examples */
+  .quick-examples {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .example-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .example-chip:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--accent-glow);
+  }
+  .example-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  /* Live mode notice */
+  .live-notice {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--safe);
+  }
+
+  /* Results */
+  .results-area {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 32px 80px;
+  }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .results-title {
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .instruction-display {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    font-style: italic;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .instruction-display .quote { color: var(--accent); font-size: 24px; line-height: 1; }
+
+  /* Blast meter */
+  .blast-meter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .blast-meter-label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+  .blast-seg {
+    height: 8px;
+    border-radius: 4px;
+    flex: 1;
+    min-width: 30px;
+    opacity: 0.3;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .blast-seg.active { opacity: 1; transform: scaleY(1.4); }
+  .blast-seg.catastrophic { background: var(--catastrophic); }
+  .blast-seg.high { background: var(--high); }
+  .blast-seg.medium { background: var(--medium); }
+  .blast-seg.low { background: var(--low); }
+  .blast-seg.safe { background: var(--safe); }
+
+  /* Interpretation cards */
+  .interp-list { display: flex; flex-direction: column; gap: 12px; }
+  .interp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+    animation: fadeSlideIn 0.3s ease forwards;
+    opacity: 0;
+  }
+  .interp-card:hover { border-color: var(--muted); transform: translateX(2px); }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .interp-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+  }
+  .interp-card.catastrophic { border-left: 4px solid var(--catastrophic); }
+  .interp-card.catastrophic::before { background: var(--catastrophic); }
+  .interp-card.high { border-left: 4px solid var(--high); }
+  .interp-card.high::before { background: var(--high); }
+  .interp-card.medium { border-left: 4px solid var(--medium); }
+  .interp-card.medium::before { background: var(--medium); }
+  .interp-card.low { border-left: 4px solid var(--low); }
+  .interp-card.low::before { background: var(--low); }
+  .interp-card.safe { border-left: 4px solid var(--safe); }
+  .interp-card.safe::before { background: var(--safe); }
+
+  .interp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .interp-action { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
+  .interp-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .interp-badge.catastrophic { background: rgba(239,68,68,0.15); color: var(--catastrophic); }
+  .interp-badge.high { background: rgba(249,115,22,0.15); color: var(--high); }
+  .interp-badge.medium { background: rgba(234,179,8,0.15); color: var(--medium); }
+  .interp-badge.low { background: rgba(59,130,246,0.15); color: var(--low); }
+  .interp-badge.safe { background: rgba(34,197,94,0.15); color: var(--safe); }
+
+  .interp-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .interp-reversible {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .rev-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .interp-command {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Menlo', 'Monaco', monospace;
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+    word-break: break-all;
+  }
+  .interp-why { font-size: 13px; color: var(--muted); font-style: italic; }
+
+  /* Kiro highlight */
+  .kiro-highlight {
+    background: rgba(239,68,68,0.05);
+    border: 1px solid rgba(239,68,68,0.15);
+  }
+  .kiro-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(239,68,68,0.15);
+    color: var(--catastrophic);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  /* Precise rewrite */
+  .precise-section {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+  }
+  .precise-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .precise-btn:hover { background: var(--accent-glow); transform: translateY(-1px); }
+  .precise-result {
+    display: none;
+    margin-top: 16px;
+    background: rgba(99,102,241,0.05);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 10px;
+    padding: 16px 18px;
+    animation: fadeSlideIn 0.2s ease forwards;
+  }
+  .precise-result.visible { display: block; }
+  .precise-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .precise-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    font-style: italic;
+  }
+  .precise-prevents {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* Divider between scenarios */
+  .scenario-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 12px 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-item { text-align: center; }
+  .stat-n { font-size: 22px; font-weight: 800; }
+  .stat-l { font-size: 11px; color: var(--muted); }
+  .stat-n.red { color: var(--catastrophic); }
+  .stat-n.orange { color: var(--high); }
+  .stat-n.green { color: var(--safe); }
+
+  /* Loading */
+  .loading-overlay {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+  }
+  .loading-overlay.visible { display: block; }
+  .spinner {
+    display: inline-block;
+    width: 24px; height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Key modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 420px;
+    width: 90%;
+  }
+  .modal h3 { font-size: 18px; margin-bottom: 8px; }
+  .modal p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+  .modal input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 12px;
+    font-family: monospace;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+  }
+  .modal-btn.primary { background: var(--accent); color: white; }
+  .modal-btn.secondary { background: var(--border); color: var(--text); }
+
+  /* Footer */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 32px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer strong { color: var(--text); }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .header { padding: 14px 16px; }
+    .hero { padding: 40px 16px 32px; }
+    .hero h1 { font-size: 30px; }
+    .input-area, .results-area { padding: 0 16px 60px; }
+    .input-row { flex-direction: column; }
+    .stats-bar { gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">⚠</div>
+    <div>
+      <div class="logo-name">AgentAmb</div>
+      <div class="logo-tag">Instruction Ambiguity Expander</div>
+    </div>
+  </div>
+  <div class="badge-kiro">⚡ Kiro/AWS Incident · June 18, 2026</div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Your agent heard<br><span>something different.</span></h1>
+    <p>Paste any instruction you'd send an AI agent. See every interpretation it might take — including the ones that <strong>delete your database</strong>.</p>
+
+    <div class="kiro-banner">
+      <div class="kiro-label">⚡ Real Incident · June 18, 2026</div>
+      <div class="kiro-text">An engineer told Kiro: <strong>"clean up the cost explorer"</strong></div>
+      <div class="kiro-sub">The agent deleted the billing export configuration. AWS lost 6.3M orders over 13 hours. The instruction was ambiguous. The agent was not.</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-label">What instruction would you give your agent?</div>
+    <div class="input-row">
+      <input
+        class="instruction-input"
+        id="instructionInput"
+        type="text"
+        placeholder='e.g. "clean up old data" or "optimize the pipeline"'
+        autocomplete="off"
+      />
+      <button class="analyze-btn" id="analyzeBtn" onclick="analyzeInstruction()">
+        Analyze →
+      </button>
+    </div>
+    <div class="quick-examples">
+      <span class="example-chip" onclick="loadExample(0)">clean up the cost explorer</span>
+      <span class="example-chip" onclick="loadExample(1)">archive old user data</span>
+      <span class="example-chip" onclick="loadExample(2)">remove duplicate records</span>
+      <span class="example-chip" onclick="loadExample(3)">tidy up the deployment pipeline</span>
+      <span class="example-chip" onclick="loadExample(4)">optimize the database</span>
+    </div>
+    <div class="live-notice">
+      <div class="live-dot"></div>
+      Demo scenarios pre-loaded · Add your Gemini API key for custom instructions
+    </div>
+  </div>
+
+  <div class="results-area" id="resultsArea" style="display:none">
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div>Expanding interpretations with Gemini...</div>
+    </div>
+
+    <div id="resultsContent" style="display:none">
+      <div class="results-header">
+        <span class="results-title">Interpretation Blast Radius</span>
+      </div>
+
+      <div class="instruction-display" id="instructionDisplay">
+        <span class="quote">"</span>
+        <span id="displayedInstruction"></span>
+        <span class="quote">"</span>
+      </div>
+
+      <div class="stats-bar" id="statsBar"></div>
+      <div class="blast-meter" id="blastMeter"></div>
+      <div class="interp-list" id="interpList"></div>
+
+      <div class="precise-section" id="preciseSection">
+        <button class="precise-btn" id="preciseBtnEl" onclick="togglePrecise()">
+          <span>✦</span> Make this instruction precise
+        </button>
+        <div class="precise-result" id="preciseResult">
+          <div class="precise-label">Precise rewrite</div>
+          <div class="precise-text" id="preciseText"></div>
+          <div class="precise-prevents" id="precisePrevents"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="keyModal">
+  <div class="modal">
+    <h3>🔑 Live Mode</h3>
+    <p>For custom instructions, add your Gemini API key. It stays in your browser only — never sent anywhere except directly to Google.</p>
+    <input type="password" id="keyInput" placeholder="AIza..." />
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeKeyModal()">Use demo mode</button>
+      <button class="modal-btn primary" onclick="saveKey()">Enable live mode</button>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  Built by <strong>Ben</strong> · Nightly Build <strong>2026-06-28</strong> ·
+  Part of the <a href="https://github.com/RLASAF12" target="_blank">Agent Safety Series</a>
+  (AgentReceipt → agent-postmortem → AgentDrift → AgentUndo → AgentAmb) ·
+  <a href="#" onclick="document.getElementById('keyModal').classList.toggle('visible');return false;">Live mode</a>
+</footer>
+
+<script>
+// ─── Pre-computed Demo Data ───────────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    instruction: "clean up the cost explorer",
+    isKiro: true,
+    preciseRewrite: "Delete only Cost Explorer saved reports and tag filters that have not been accessed in the past 90 days. Do not delete, modify, or disable any active billing exports, budgets, or cost-tracking configurations.",
+    whatItPrevents: "Prevents deletion of the billing export configuration — the exact action that caused the Kiro/AWS 13-hour outage.",
+    interpretations: [
+      {
+        action: "Deletes the billing data export configuration, stopping all cost tracking",
+        blast_radius: "CATASTROPHIC",
+        reversible: false,
+        example_command: "aws ce delete-cost-export-config",
+        why_plausible: "Agent interprets 'clean up' as removing the source of data, not just the view. This is the exact failure that caused the Kiro/AWS outage.",
+        isKiro: true
+      },
+      {
+        action: "Deletes historical cost data or all budget definitions",
+        blast_radius: "HIGH",
+        reversible: false,
+        example_command: "aws ce delete-cost-data --all-history",
+        why_plausible: "'Clean up' often means removing old or irrelevant data — the agent may treat historical records as clutter."
+      },
+      {
+        action: "Removes custom reports and saved filter views",
+        blast_radius: "MEDIUM",
+        reversible: true,
+        example_command: "aws ce delete-report --report-name *",
+        why_plausible: "Reports and saved views look like 'clutter' to an agent trying to tidy up a dashboard."
+      },
+      {
+        action: "Resets display settings and default filters to system defaults",
+        blast_radius: "LOW",
+        reversible: true,
+        example_command: "aws ce update-settings --filter-preset default",
+        why_plausible: "A conservative interpretation of 'clean up' as aesthetic tidying only."
+      },
+      {
+        action: "Generates an audit report of unused Cost Explorer features",
+        blast_radius: "SAFE",
+        reversible: true,
+        example_command: "aws ce generate-usage-report --scope unused",
+        why_plausible: "The most cautious interpretation: read-only analysis to understand what might need attention."
+      }
+    ]
+  },
+  {
+    instruction: "archive old user data",
+    isKiro: false,
+    preciseRewrite: "Export users who have not logged in for more than 12 months to a compressed backup file in S3. Do not delete any records from the primary database. Flag the exported users as archived in the users table only after confirming the backup file is accessible.",
+    whatItPrevents: "Prevents permanent deletion of user records instead of safe export to cold storage.",
+    interpretations: [
+      {
+        action: "Permanently deletes all user records older than a threshold date",
+        blast_radius: "CATASTROPHIC",
+        reversible: false,
+        example_command: "DELETE FROM users WHERE created_at < NOW() - INTERVAL '1 year'",
+        why_plausible: "'Archive' is ambiguous in SQL context — an agent without GDPR context may interpret archive as delete."
+      },
+      {
+        action: "Drops or truncates the historical user activity log tables",
+        blast_radius: "HIGH",
+        reversible: false,
+        example_command: "DROP TABLE user_activity_log_2023",
+        why_plausible: "Old activity logs look like 'old user data' to an agent scanning table names."
+      },
+      {
+        action: "Moves user records to a separate archive database schema",
+        blast_radius: "MEDIUM",
+        reversible: true,
+        example_command: "INSERT INTO archive.users SELECT * FROM users WHERE inactive=true",
+        why_plausible: "A reasonable database pattern, but risks losing the data if the archive schema has different retention rules."
+      },
+      {
+        action: "Compresses and exports inactive user records to S3 cold storage",
+        blast_radius: "LOW",
+        reversible: true,
+        example_command: "aws s3 cp users_export.csv s3://backups/archive/",
+        why_plausible: "The standard safe interpretation — export without deleting the source."
+      },
+      {
+        action: "Flags inactive users with an archived=true column and generates a report",
+        blast_radius: "SAFE",
+        reversible: true,
+        example_command: "UPDATE users SET archived=true WHERE last_login < '2024-01-01'",
+        why_plausible: "Marking only, no data movement — the safest possible interpretation."
+      }
+    ]
+  },
+  {
+    instruction: "remove duplicate records",
+    isKiro: false,
+    preciseRewrite: "Identify records in the customers table where email address appears more than once. Create a backup table customers_dedup_backup before any changes. Keep the record with the earliest created_at timestamp. Do not delete any records until I have reviewed and approved the backup.",
+    whatItPrevents: "Prevents deleting the 'wrong' duplicate (the primary record) and losing data without a backup.",
+    interpretations: [
+      {
+        action: "Deletes one record from every pair without review, using arbitrary row ID selection",
+        blast_radius: "CATASTROPHIC",
+        reversible: false,
+        example_command: "DELETE FROM customers WHERE id NOT IN (SELECT MIN(id) FROM customers GROUP BY email)",
+        why_plausible: "A common SQL dedup pattern — but deleting by arbitrary MIN(id) may remove the primary account with all its purchase history."
+      },
+      {
+        action: "Drops the entire table and recreates it with DISTINCT rows only",
+        blast_radius: "HIGH",
+        reversible: false,
+        example_command: "CREATE TABLE tmp AS SELECT DISTINCT * FROM customers; DROP TABLE customers;",
+        why_plausible: "An aggressive agent may interpret 'remove duplicates' as a full table rebuild."
+      },
+      {
+        action: "Merges duplicate records by moving relationships to the older record, then deletes newer ones",
+        blast_radius: "MEDIUM",
+        reversible: true,
+        example_command: "UPDATE orders SET customer_id = :primary_id WHERE customer_id = :duplicate_id",
+        why_plausible: "Careful deduplication — but if the merge logic has a bug, foreign key relationships break."
+      },
+      {
+        action: "Creates a report of all duplicates and exports it for human review before any deletion",
+        blast_radius: "LOW",
+        reversible: true,
+        example_command: "SELECT email, COUNT(*) FROM customers GROUP BY email HAVING COUNT(*) > 1",
+        why_plausible: "Read-only discovery phase — the safest initial step before any action."
+      },
+      {
+        action: "Tags duplicates with a is_duplicate flag and waits for approval",
+        blast_radius: "SAFE",
+        reversible: true,
+        example_command: "UPDATE customers SET is_duplicate=true WHERE ...",
+        why_plausible: "Non-destructive marking only — humans make the final call."
+      }
+    ]
+  },
+  {
+    instruction: "tidy up the deployment pipeline",
+    isKiro: false,
+    preciseRewrite: "List all CI/CD pipeline steps that have been disabled or unused for more than 30 days and provide a report. Do not delete, disable, or modify any pipeline configuration files or deployment workflows until I approve the change list.",
+    whatItPrevents: "Prevents deleting active deployment stages or rollback jobs that appear unused but are critical for emergency recovery.",
+    interpretations: [
+      {
+        action: "Deletes CI/CD stages marked as disabled, including rollback and recovery jobs",
+        blast_radius: "CATASTROPHIC",
+        reversible: false,
+        example_command: "gh api DELETE /repos/org/app/actions/workflows/rollback.yml",
+        why_plausible: "Rollback pipelines are often disabled between incidents — an agent may see 'disabled' as 'unused' and delete them."
+      },
+      {
+        action: "Removes all pipeline environment variables not referenced in the current branch",
+        blast_radius: "HIGH",
+        reversible: false,
+        example_command: "gh secret delete PROD_DB_KEY",
+        why_plausible: "Unused-looking secrets get swept up in a 'tidy up' — then the next deployment fails at prod credential time."
+      },
+      {
+        action: "Consolidates parallel test jobs into sequential, slowing deployment speed",
+        blast_radius: "MEDIUM",
+        reversible: true,
+        example_command: "# Modify .github/workflows/ci.yml to remove parallel matrix",
+        why_plausible: "Parallelism can look like redundancy to an agent optimizing for simplicity."
+      },
+      {
+        action: "Removes unused cache volumes and artifacts older than 30 days",
+        blast_radius: "LOW",
+        reversible: true,
+        example_command: "gh api /repos/org/app/actions/caches --method DELETE",
+        why_plausible: "Cache cleanup is genuinely low-risk and a common 'tidy up' task."
+      },
+      {
+        action: "Reformats pipeline YAML for consistency and generates a dependency graph report",
+        blast_radius: "SAFE",
+        reversible: true,
+        example_command: "yamllint .github/workflows/*.yml",
+        why_plausible: "Format-only changes with no functional effect."
+      }
+    ]
+  },
+  {
+    instruction: "optimize the database",
+    isKiro: false,
+    preciseRewrite: "Run ANALYZE and VACUUM on all tables with more than 10,000 rows. Add an index on orders.customer_id if one does not already exist. Do not drop any existing indexes, modify any schema, or run VACUUM FULL (which locks tables) without explicit approval.",
+    whatItPrevents: "Prevents dropping indexes that appear unused during off-peak hours but are critical during peak load.",
+    interpretations: [
+      {
+        action: "Drops all indexes to rebuild from scratch, taking the database offline for hours",
+        blast_radius: "CATASTROPHIC",
+        reversible: false,
+        example_command: "DROP INDEX idx_orders_customer; DROP INDEX idx_users_email;",
+        why_plausible: "'Optimize' can mean rebuild from scratch — and an agent may drop indexes before rebuilding, causing an outage."
+      },
+      {
+        action: "Runs VACUUM FULL on all tables simultaneously, locking them for writes",
+        blast_radius: "HIGH",
+        reversible: false,
+        example_command: "VACUUM FULL ANALYZE;",
+        why_plausible: "VACUUM FULL is a legitimate optimization tool — but on a production database it causes a full write lock."
+      },
+      {
+        action: "Removes duplicate or similar indexes without checking which queries use them",
+        blast_radius: "MEDIUM",
+        reversible: true,
+        example_command: "DROP INDEX CONCURRENTLY idx_duplicate_users_email_created",
+        why_plausible: "Index deduplication is a real optimization — but an off-peak 'unused' index may be load-critical."
+      },
+      {
+        action: "Runs ANALYZE to refresh query planner statistics on all tables",
+        blast_radius: "LOW",
+        reversible: true,
+        example_command: "ANALYZE VERBOSE;",
+        why_plausible: "Statistics refresh is safe, fast, and genuinely improves query performance."
+      },
+      {
+        action: "Generates a slow query report and index usage stats for human review",
+        blast_radius: "SAFE",
+        reversible: true,
+        example_command: "SELECT * FROM pg_stat_user_indexes ORDER BY idx_scan ASC;",
+        why_plausible: "Read-only analysis — gives humans the data to make optimization decisions."
+      }
+    ]
+  }
+];
+
+const BLAST_ORDER = ['CATASTROPHIC', 'HIGH', 'MEDIUM', 'LOW', 'SAFE'];
+const BLAST_COLOR = {
+  CATASTROPHIC: 'catastrophic',
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low',
+  SAFE: 'safe'
+};
+const BLAST_ICON = {
+  CATASTROPHIC: '💥',
+  HIGH: '🔥',
+  MEDIUM: '⚠️',
+  LOW: '🔵',
+  SAFE: '✅'
+};
+
+let currentScenarioIdx = -1;
+let preciseOpen = false;
+let geminiKey = null;
+
+function loadExample(idx) {
+  document.querySelectorAll('.example-chip').forEach((c, i) => {
+    c.classList.toggle('active', i === idx);
+  });
+  currentScenarioIdx = idx;
+  const s = SCENARIOS[idx];
+  document.getElementById('instructionInput').value = s.instruction;
+  renderScenario(s, false);
+}
+
+function analyzeInstruction() {
+  const val = document.getElementById('instructionInput').value.trim();
+  if (!val) return;
+
+  const preloaded = SCENARIOS.find(s => s.instruction.toLowerCase() === val.toLowerCase());
+  if (preloaded) {
+    currentScenarioIdx = SCENARIOS.indexOf(preloaded);
+    renderScenario(preloaded, false);
+    return;
+  }
+
+  // Live Gemini call
+  if (!geminiKey) {
+    document.getElementById('keyModal').classList.add('visible');
+    return;
+  }
+  callGemini(val);
+}
+
+async function callGemini(instruction) {
+  const ra = document.getElementById('resultsArea');
+  const lo = document.getElementById('loadingOverlay');
+  const rc = document.getElementById('resultsContent');
+  ra.style.display = 'block';
+  lo.classList.add('visible');
+  rc.style.display = 'none';
+
+  const prompt = `For the instruction: "${instruction}"
+
+Generate 4-5 plausible interpretations an AI agent might take, ordered from most to least dangerous.
+
+Return ONLY a JSON array. Each item: action (string), blast_radius (CATASTROPHIC|HIGH|MEDIUM|LOW|SAFE), reversible (boolean), example_command (string, short), why_plausible (string).`;
+
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        contents: [{parts: [{text: prompt}]}],
+        generationConfig: {temperature: 0.2, maxOutputTokens: 2000}
+      })
+    });
+    const data = await resp.json();
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '[]';
+    text = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    const interpretations = JSON.parse(text);
+    const scenario = {instruction, isKiro: false, interpretations, preciseRewrite: null, whatItPrevents: null};
+    renderScenario(scenario, true);
+  } catch (e) {
+    lo.classList.remove('visible');
+    alert('Error calling Gemini: ' + e.message);
+  }
+}
+
+function renderScenario(scenario, fromLive) {
+  const ra = document.getElementById('resultsArea');
+  const lo = document.getElementById('loadingOverlay');
+  const rc = document.getElementById('resultsContent');
+  ra.style.display = 'block';
+  lo.classList.remove('visible');
+  rc.style.display = 'block';
+  preciseOpen = false;
+  document.getElementById('preciseResult').classList.remove('visible');
+  document.getElementById('preciseBtnEl').style.display = scenario.preciseRewrite ? '' : 'none';
+
+  document.getElementById('displayedInstruction').textContent = scenario.instruction;
+
+  // Stats
+  const counts = {CATASTROPHIC: 0, HIGH: 0, MEDIUM: 0, LOW: 0, SAFE: 0};
+  scenario.interpretations.forEach(i => counts[i.blast_radius]++);
+  const statsBar = document.getElementById('statsBar');
+  statsBar.innerHTML = `
+    <div class="stat-item"><div class="stat-n red">${counts.CATASTROPHIC + counts.HIGH}</div><div class="stat-l">Dangerous</div></div>
+    <div class="stat-item"><div class="stat-n orange">${counts.MEDIUM}</div><div class="stat-l">Risky</div></div>
+    <div class="stat-item"><div class="stat-n green">${counts.LOW + counts.SAFE}</div><div class="stat-l">Safe</div></div>
+    <div class="stat-item"><div class="stat-n" style="color:var(--text)">${scenario.interpretations.length}</div><div class="stat-l">Total paths</div></div>
+  `;
+
+  // Blast meter
+  const blastMeter = document.getElementById('blastMeter');
+  blastMeter.innerHTML = '<span class="blast-meter-label">Blast radius:</span>';
+  BLAST_ORDER.forEach(br => {
+    const seg = document.createElement('div');
+    seg.className = `blast-seg ${BLAST_COLOR[br]}`;
+    if (counts[br] > 0) seg.classList.add('active');
+    seg.title = `${br}: ${counts[br]} path(s)`;
+    blastMeter.appendChild(seg);
+  });
+
+  // Interpretations
+  const list = document.getElementById('interpList');
+  list.innerHTML = '';
+  scenario.interpretations.forEach((interp, idx) => {
+    const card = document.createElement('div');
+    const cls = BLAST_COLOR[interp.blast_radius];
+    card.className = `interp-card ${cls}${interp.isKiro ? ' kiro-highlight' : ''}`;
+    card.style.animationDelay = `${idx * 60}ms`;
+    card.innerHTML = `
+      ${interp.isKiro ? '<div class="kiro-tag">⚡ This is what caused the Kiro/AWS outage</div>' : ''}
+      <div class="interp-header">
+        <div class="interp-action">${BLAST_ICON[interp.blast_radius]} ${interp.action}</div>
+        <span class="interp-badge ${cls}">${interp.blast_radius}</span>
+      </div>
+      <div class="interp-meta">
+        <div class="interp-reversible">
+          <div class="rev-dot" style="background:${interp.reversible ? 'var(--safe)' : 'var(--catastrophic)'}"></div>
+          <span style="color:${interp.reversible ? 'var(--safe)' : 'var(--catastrophic)'}; font-size:12px;">
+            ${interp.reversible ? 'Reversible' : 'IRREVERSIBLE'}
+          </span>
+        </div>
+      </div>
+      <div class="interp-command">$ ${interp.example_command}</div>
+      <div class="interp-why">${interp.why_plausible}</div>
+    `;
+    list.appendChild(card);
+  });
+
+  // Precise rewrite
+  if (scenario.preciseRewrite) {
+    document.getElementById('preciseText').textContent = scenario.preciseRewrite;
+    document.getElementById('precisePrevents').textContent = '✦ ' + scenario.whatItPrevents;
+  }
+
+  // Scroll into view
+  setTimeout(() => ra.scrollIntoView({behavior: 'smooth', block: 'start'}), 100);
+}
+
+function togglePrecise() {
+  preciseOpen = !preciseOpen;
+  document.getElementById('preciseResult').classList.toggle('visible', preciseOpen);
+}
+
+function closeKeyModal() {
+  document.getElementById('keyModal').classList.remove('visible');
+}
+
+function saveKey() {
+  const k = document.getElementById('keyInput').value.trim();
+  if (k) {
+    geminiKey = k;
+    closeKeyModal();
+    analyzeInstruction();
+  }
+}
+
+// Handle Enter key
+document.getElementById('instructionInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyzeInstruction();
+});
+
+// Auto-load Kiro example on page load
+window.addEventListener('load', () => {
+  setTimeout(() => loadExample(0), 400);
+});
+</script>
+</body>
+</html>
