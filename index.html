@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FixLoop — Turn Agent Corrections Into System Prompt Rules</title>
+  <meta name="description" content="Paste conversations where you corrected your AI agent. Get exact system prompt rules to prevent those mistakes forever.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    textarea:focus { outline: none; }
+    .root-cause-badge { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800/70 px-6 py-4 sticky top-0 bg-gray-950/95 backdrop-blur-sm z-10">
+    <div class="max-w-3xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold text-sm">FL</div>
+        <div>
+          <span class="font-semibold text-white">FixLoop</span>
+          <span class="text-gray-500 text-xs ml-2 hidden sm:inline">retrospective prompt surgery</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <input id="apiKey" type="password" placeholder="Gemini API key" 
+            class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 w-44 sm:w-52 focus:border-purple-500 transition-colors"
+            onchange="saveKey()" oninput="saveKey()"/>
+        </div>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" 
+          class="text-xs text-purple-400 hover:text-purple-300 hidden sm:block">Get key →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="max-w-3xl mx-auto px-6 pt-10 pb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">Your agent keeps making the same mistake.</h1>
+    <p class="text-gray-400 text-base mb-6">Paste the conversations where you had to correct it.<br>Get exact text to patch your system prompt — nothing to install.</p>
+
+    <div class="grid grid-cols-3 gap-3 text-center mb-8">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <div class="text-purple-400 font-bold text-lg">①</div>
+        <div class="text-xs text-gray-400 mt-1">Paste corrections</div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <div class="text-purple-400 font-bold text-lg">②</div>
+        <div class="text-xs text-gray-400 mt-1">Analyze with Gemini</div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <div class="text-purple-400 font-bold text-lg">③</div>
+        <div class="text-xs text-gray-400 mt-1">Copy the patch</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main content -->
+  <main class="max-w-3xl mx-auto px-6 pb-20">
+
+    <!-- Correction inputs -->
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-gray-300">Correction Snippets</h2>
+      <span class="text-xs text-gray-600">Include what the agent did AND how you fixed it</span>
+    </div>
+
+    <div id="corrections" class="space-y-3 mb-4"></div>
+
+    <button onclick="addCorrection()" id="addBtn"
+      class="w-full border border-dashed border-gray-700 hover:border-purple-600 rounded-lg py-3 text-sm text-gray-500 hover:text-purple-400 transition-all flex items-center justify-center gap-2 mb-6">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Add another correction
+    </button>
+
+    <button onclick="analyze()" id="analyzeBtn"
+      class="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+      <svg id="analyzeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.346a5.001 5.001 0 01-6.728 0l-.347-.346z"/>
+      </svg>
+      <span id="analyzeBtnText">Analyze & Generate Rules</span>
+    </button>
+
+    <!-- Results -->
+    <div id="results" class="mt-10 hidden fade-in"></div>
+
+  </main>
+
+  <!-- Example modal overlay -->
+  <div id="exampleModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onclick="closeExample()">
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-lg w-full" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-semibold text-white">Example Correction Snippets</h3>
+        <button onclick="closeExample()" class="text-gray-500 hover:text-gray-300">✕</button>
+      </div>
+      <div class="space-y-4 text-sm text-gray-300">
+        <div class="bg-gray-950 rounded p-3 font-mono text-xs">
+          <p class="text-gray-500 mb-1"># Example 1: Format issue</p>
+          <p>User: Summarize this report</p>
+          <p>Agent: [writes 500-word essay]</p>
+          <p class="text-yellow-400">User: I said SUMMARY. Max 5 bullet points, not an essay.</p>
+        </div>
+        <div class="bg-gray-950 rounded p-3 font-mono text-xs">
+          <p class="text-gray-500 mb-1"># Example 2: Scope issue</p>
+          <p>User: Search for recent AI news</p>
+          <p>Agent: [returns articles from 2023]</p>
+          <p class="text-yellow-400">User: Recent means last 7 DAYS. Not old articles.</p>
+        </div>
+        <div class="bg-gray-950 rounded p-3 font-mono text-xs">
+          <p class="text-gray-500 mb-1"># Example 3: Wrong assumption</p>
+          <p>User: Edit this email</p>
+          <p>Agent: [rewrites entire email from scratch]</p>
+          <p class="text-yellow-400">User: I said EDIT, not rewrite. Keep my voice and structure.</p>
+        </div>
+      </div>
+      <button onclick="loadExamples()" class="mt-4 w-full bg-purple-600 hover:bg-purple-500 text-white text-sm py-2 rounded-lg">
+        Load these examples
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let correctionCount = 0;
+
+    const EXAMPLES = [
+      `User: Summarize this quarterly report\nAgent: [writes 500-word detailed analysis with section headers]\nUser: I said SUMMARY. Give me 3-5 bullet points max, not a full essay. I need something I can paste into a Slack message.`,
+      `User: Search for recent AI news\nAgent: [returns 10 articles from 2022-2023]\nUser: "Recent" means the LAST 7 DAYS. Why are you giving me year-old articles? Always default to last 7 days unless I specify otherwise.`,
+      `User: Help me edit this email to my client\nAgent: [completely rewrites the entire email with different structure and tone]\nUser: I said EDIT not REWRITE. Fix the grammar and flow but keep my words, my voice, and my structure. Never change what I'm actually saying.`
+    ];
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('fixloop_key');
+      if (savedKey) document.getElementById('apiKey').value = savedKey;
+      addCorrection();
+    });
+
+    function saveKey() {
+      const k = document.getElementById('apiKey').value.trim();
+      if (k) localStorage.setItem('fixloop_key', k);
+    }
+
+    function addCorrection(prefill = '') {
+      correctionCount++;
+      const n = correctionCount;
+      const div = document.createElement('div');
+      div.className = 'correction-card bg-gray-900 border border-gray-800 rounded-xl p-4 fade-in';
+      div.dataset.id = n;
+      div.innerHTML = `
+        <div class="flex justify-between items-center mb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-medium text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded">Correction #${document.querySelectorAll('.correction-card').length + 1}</span>
+            ${n === 1 ? `<button onclick="openExample()" class="text-xs text-gray-600 hover:text-gray-400 underline">see examples</button>` : ''}
+          </div>
+          <button onclick="removeCorrection(this)" class="text-xs text-gray-700 hover:text-red-400 transition-colors">Remove</button>
+        </div>
+        <textarea 
+          placeholder="Paste the full conversation here. Include what the agent did AND how you corrected it.\n\nTip: The correction moment (where you said 'No', 'Actually', 'I said...') is the most important part."
+          class="w-full bg-gray-950 border border-gray-800 focus:border-purple-600 rounded-lg px-3 py-2.5 text-sm text-gray-300 resize-none transition-colors placeholder-gray-700"
+          rows="6"
+        >${prefill}</textarea>
+      `;
+      document.getElementById('corrections').appendChild(div);
+      // Renumber all cards
+      renumber();
+    }
+
+    function removeCorrection(btn) {
+      btn.closest('.correction-card').remove();
+      renumber();
+    }
+
+    function renumber() {
+      document.querySelectorAll('.correction-card').forEach((card, i) => {
+        const badge = card.querySelector('span');
+        if (badge) badge.textContent = `Correction #${i + 1}`;
+      });
+    }
+
+    function openExample() { document.getElementById('exampleModal').classList.remove('hidden'); }
+    function closeExample() { document.getElementById('exampleModal').classList.add('hidden'); }
+
+    function loadExamples() {
+      closeExample();
+      document.getElementById('corrections').innerHTML = '';
+      correctionCount = 0;
+      EXAMPLES.forEach(ex => addCorrection(ex));
+    }
+
+    async function analyze() {
+      const key = localStorage.getItem('fixloop_key') || document.getElementById('apiKey').value.trim();
+      if (!key) {
+        showError('Enter your Gemini API key in the top-right corner. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline">Get one free →</a>');
+        return;
+      }
+
+      const snippets = [];
+      document.querySelectorAll('.correction-card textarea').forEach((ta, i) => {
+        const v = ta.value.trim();
+        if (v) snippets.push({ index: i + 1, content: v });
+      });
+
+      if (!snippets.length) {
+        showError('Add at least one correction snippet before analyzing.');
+        return;
+      }
+
+      setLoading(true);
+
+      const prompt = `You are a system prompt engineer specializing in AI agent reliability.
+
+The user provides conversation snippets where they had to CORRECT an AI agent's behavior — moments where they said "No, I meant...", "Actually...", "Stop doing...", or had to repeat instructions.
+
+Each correction reveals a precise gap in the agent's system prompt instructions.
+
+For EACH correction snippet:
+1. Identify the exact correction moment (what the user said to fix the behavior)
+2. Diagnose the root cause category
+3. Write a precise, imperative NEW RULE that, if added to the system prompt, would have prevented this correction entirely
+4. Show a before/after to illustrate the difference
+
+Root cause categories:
+- "missing_constraint" — the agent wasn't told NOT to do something
+- "wrong_assumption" — the agent assumed something the user didn't intend  
+- "unclear_scope" — a term like "recent" or "summary" wasn't defined
+- "missing_context" — the agent lacked background info it needed
+- "format_issue" — the output format wasn't specified
+- "preservation_issue" — the agent changed things it should have kept
+
+INPUT CORRECTIONS:
+${snippets.map(s => `--- Correction ${s.index} ---\n${s.content}`).join('\n\n')}
+
+Respond ONLY with valid JSON (no markdown, no commentary):
+{
+  "corrections": [
+    {
+      "index": 1,
+      "correction_moment": "The exact phrase that shows the user correcting the agent (quote from the snippet)",
+      "pattern": "What this reveals about the agent's behavior (1 concise sentence)",
+      "root_cause": "missing_constraint|wrong_assumption|unclear_scope|missing_context|format_issue|preservation_issue",
+      "diagnosis": "Specifically what was missing from the system prompt (1 sentence)",
+      "new_rule": "The exact instruction text to add to the system prompt (1-3 sentences, imperative voice, specific)",
+      "before": "One-line example of how the agent behaves WITHOUT this rule",
+      "after": "One-line example of how the agent behaves WITH this rule"
+    }
+  ],
+  "patch_block": "## FixLoop Patch — ${new Date().toISOString().split('T')[0]}\\n\\nAdd the following rules to your system prompt:\\n\\n[numbered list of all new_rules, one per line with blank line between]",
+  "summary": "${snippets.length} correction${snippets.length > 1 ? 's' : ''} analyzed → X patterns identified → Y rules generated"
+}`;
+
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.25, maxOutputTokens: 4096 }
+            })
+          }
+        );
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `API error ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Extract JSON (handle markdown code blocks)
+        const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
+        if (!match) throw new Error('Gemini returned an unexpected format. Try again.');
+
+        const result = JSON.parse(match[1] || match[0]);
+        renderResults(result);
+
+      } catch (err) {
+        showError(`Analysis failed: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function setLoading(on) {
+      const btn = document.getElementById('analyzeBtn');
+      const icon = document.getElementById('analyzeIcon');
+      const text = document.getElementById('analyzeBtnText');
+      btn.disabled = on;
+      if (on) {
+        icon.classList.add('spin');
+        text.textContent = 'Analyzing with Gemini...';
+      } else {
+        icon.classList.remove('spin');
+        text.textContent = 'Analyze & Generate Rules';
+      }
+    }
+
+    function showError(msg) {
+      const r = document.getElementById('results');
+      r.innerHTML = `<div class="bg-red-950/40 border border-red-800/60 rounded-xl p-4 text-red-400 text-sm">${msg}</div>`;
+      r.classList.remove('hidden');
+    }
+
+    const ROOT_CAUSE_CONFIG = {
+      'missing_constraint':  { label: '🚫 Missing constraint',    bg: 'bg-red-900/25',    text: 'text-red-400',    border: 'border-red-900/40' },
+      'wrong_assumption':    { label: '🤔 Wrong assumption',      bg: 'bg-orange-900/25', text: 'text-orange-400', border: 'border-orange-900/40' },
+      'unclear_scope':       { label: '🎯 Unclear scope',         bg: 'bg-yellow-900/25', text: 'text-yellow-400', border: 'border-yellow-900/40' },
+      'missing_context':     { label: '📋 Missing context',       bg: 'bg-blue-900/25',   text: 'text-blue-400',   border: 'border-blue-900/40' },
+      'format_issue':        { label: '📐 Format issue',          bg: 'bg-purple-900/25', text: 'text-purple-400', border: 'border-purple-900/40' },
+      'preservation_issue':  { label: '🛡️ Preservation issue',   bg: 'bg-teal-900/25',   text: 'text-teal-400',   border: 'border-teal-900/40' },
+    };
+
+    function renderResults(result) {
+      const container = document.getElementById('results');
+
+      const correctionCards = result.corrections.map(c => {
+        const rc = ROOT_CAUSE_CONFIG[c.root_cause] || { label: c.root_cause, bg: 'bg-gray-800', text: 'text-gray-400', border: 'border-gray-700' };
+        return `
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 fade-in">
+          <!-- Header -->
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
+            <span class="text-xs font-medium text-gray-500 bg-gray-800 px-2 py-0.5 rounded">Correction #${c.index}</span>
+            <span class="root-cause-badge ${rc.bg} ${rc.text} border ${rc.border} px-2 py-0.5 rounded">${rc.label}</span>
+          </div>
+
+          <!-- Correction moment -->
+          ${c.correction_moment ? `
+          <div class="bg-amber-950/30 border border-amber-900/40 rounded-lg p-3 mb-4">
+            <p class="text-xs text-amber-500 font-medium mb-1">CORRECTION MOMENT</p>
+            <p class="text-sm text-amber-200 italic">"${c.correction_moment}"</p>
+          </div>` : ''}
+
+          <!-- Pattern & Diagnosis -->
+          <p class="text-sm text-gray-300 mb-1"><span class="text-gray-500 text-xs font-medium">PATTERN</span></p>
+          <p class="text-sm text-white mb-3">${c.pattern}</p>
+          <p class="text-sm text-gray-400 mb-4 text-xs">${c.diagnosis}</p>
+
+          <!-- Before / After -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="bg-red-950/25 border border-red-900/30 rounded-lg p-3">
+              <p class="text-xs font-semibold text-red-400 mb-1.5">❌ BEFORE</p>
+              <p class="text-xs text-gray-400 leading-relaxed">${c.before}</p>
+            </div>
+            <div class="bg-green-950/25 border border-green-900/30 rounded-lg p-3">
+              <p class="text-xs font-semibold text-green-400 mb-1.5">✅ AFTER</p>
+              <p class="text-xs text-gray-400 leading-relaxed">${c.after}</p>
+            </div>
+          </div>
+
+          <!-- New Rule -->
+          <div class="bg-purple-950/30 border border-purple-800/50 rounded-lg p-4">
+            <p class="text-xs font-semibold text-purple-400 mb-2">NEW RULE →</p>
+            <p class="text-sm text-white leading-relaxed">${c.new_rule}</p>
+          </div>
+        </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <!-- Summary -->
+        <div class="bg-gray-900 border border-purple-800/40 rounded-xl p-4 mb-6 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">✓</div>
+          <div>
+            <p class="text-white font-medium text-sm">${result.summary}</p>
+            <p class="text-gray-500 text-xs mt-0.5">Your patch is ready to copy below</p>
+          </div>
+        </div>
+
+        <!-- Individual corrections -->
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Analysis</h3>
+        <div class="space-y-4 mb-8">${correctionCards}</div>
+
+        <!-- Patch block -->
+        <div class="sticky bottom-4">
+          <div class="bg-gray-900 border border-green-800/50 rounded-xl overflow-hidden shadow-2xl shadow-green-900/10">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+              <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                <span class="text-sm font-semibold text-white">System Prompt Patch</span>
+                <span class="text-xs text-gray-500">— ready to copy</span>
+              </div>
+              <button onclick="copyPatch(event)" id="copyBtn"
+                class="bg-green-600 hover:bg-green-500 text-white text-xs font-medium px-4 py-1.5 rounded-lg transition-colors">
+                Copy Patch
+              </button>
+            </div>
+            <pre id="patchText" class="text-sm text-green-300 mono p-4 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-64 overflow-y-auto">${result.patch_block}</pre>
+          </div>
+        </div>
+      `;
+
+      container.classList.remove('hidden');
+      setTimeout(() => container.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+
+    function copyPatch(event) {
+      const text = document.getElementById('patchText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'Copied!';
+        btn.classList.replace('bg-green-600', 'bg-green-700');
+        setTimeout(() => {
+          btn.textContent = 'Copy Patch';
+          btn.classList.replace('bg-green-700', 'bg-green-600');
+        }, 2500);
+      });
+    }
+  </script>
+</body>
+</html>
