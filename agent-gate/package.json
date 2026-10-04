@@ -1,0 +1,30 @@
+{
+  "name": "agent-gate",
+  "version": "1.0.0",
+  "description": "MCP Tool Approval Gateway — pause any agent tool call for human review",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "agent-gate": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "agent",
+    "approval",
+    "human-in-the-loop",
+    "hitl",
+    "ai-safety",
+    "tool-gating"
+  ],
+  "author": "RLASAF12",
+  "license": "MIT"
+}
