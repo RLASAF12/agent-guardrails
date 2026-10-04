@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentUndo — Reversible AI Agent Actions</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3a;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --low: #22c55e;
+      --med: #f59e0b;
+      --high: #ef4444;
+      --accent: #6366f1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px 24px;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .logo {
+      width: 50px; height: 50px;
+      background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; flex-shrink: 0;
+      box-shadow: 0 0 24px rgba(99,102,241,0.35);
+    }
+
+    .header-text h1 {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    }
+
+    .header-text p {
+      color: var(--text-dim); font-size: 13px; margin-top: 2px;
+    }
+
+    .series-badge {
+      margin-left: auto;
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.28);
+      color: #a5b4fc;
+      padding: 5px 13px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* ─── STATS ───────────────────────────────────────────── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+
+    .stat-card .label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .value {
+      font-size: 26px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #stat-pending { color: var(--med); }
+    #stat-committed { color: var(--low); }
+    #stat-rolledback { color: var(--high); }
+    #stat-saved { color: var(--accent); }
+
+    /* ─── CONTROLS ────────────────────────────────────────── */
+    .controls-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+    }
+
+    .controls-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .scenario-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .scenario-btn:hover {
+      border-color: var(--accent);
+      color: #a5b4fc;
+    }
+
+    .risk-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+    }
+
+    /* ─── MAIN LAYOUT ─────────────────────────────────────── */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-badge {
+      background: var(--surface2);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+
+    /* ─── ACTION CARDS ────────────────────────────────────── */
+    .action-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .empty-queue {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 52px 32px;
+      text-align: center;
+      color: var(--text-dim);
+    }
+
+    .empty-queue .icon { font-size: 44px; margin-bottom: 12px; }
+    .empty-queue p { font-size: 14px; line-height: 1.6; }
+
+    .action-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .action-card.risk-low  { border-left: 3px solid var(--low);  }
+    .action-card.risk-med  { border-left: 3px solid var(--med);  }
+    .action-card.risk-high { border-left: 3px solid var(--high); }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .action-card { animation: slideDown 0.28s ease; }
+
+    @keyframes flashGreen {
+      0%   { background: var(--surface); }
+      40%  { background: rgba(34,197,94,0.12); }
+      100% { background: var(--surface); }
+    }
+    @keyframes flashRed {
+      0%   { background: var(--surface); }
+      40%  { background: rgba(239,68,68,0.12); }
+      100% { background: var(--surface); }
+    }
+
+    .action-card.flash-commit   { animation: flashGreen 0.45s ease; }
+    .action-card.flash-rollback { animation: flashRed   0.45s ease; }
+
+    /* card header */
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .action-icon {
+      width: 38px; height: 38px;
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+
+    .risk-low  .action-icon { background: rgba(34,197,94,0.1);  }
+    .risk-med  .action-icon { background: rgba(245,158,11,0.1); }
+    .risk-high .action-icon { background: rgba(239,68,68,0.1);  }
+
+    .action-meta { flex: 1; }
+
+    .action-type {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .action-dest {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .risk-pill {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .risk-pill.low  { background: rgba(34,197,94,0.13); color: var(--low);  }
+    .risk-pill.med  { background: rgba(245,158,11,0.13); color: var(--med); }
+    .risk-pill.high { background: rgba(239,68,68,0.13);  color: var(--high); }
+
+    /* payload */
+    .payload {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: pre;
+      overflow: hidden;
+      max-height: 78px;
+      margin-bottom: 14px;
+    }
+
+    /* footer with timer */
+    .card-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .timer-wrap {
+      position: relative;
+      width: 50px; height: 50px;
+      flex-shrink: 0;
+    }
+
+    .timer-wrap svg { transform: rotate(-90deg); }
+
+    .ring-track {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 3.5;
+    }
+
+    .ring-fill {
+      fill: none;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.25s linear;
+    }
+
+    .risk-low  .ring-fill { stroke: var(--low);  }
+    .risk-med  .ring-fill { stroke: var(--med);  }
+    .risk-high .ring-fill { stroke: var(--high); }
+
+    .timer-label {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      font-weight: 800;
+      font-family: 'SF Mono', monospace;
+    }
+
+    .risk-low  .timer-label { color: var(--low);  }
+    .risk-med  .timer-label { color: var(--med);  }
+    .risk-high .timer-label { color: var(--high); }
+
+    .timer-label.urgent { color: var(--high) !important; }
+
+    .footer-info {
+      flex: 1;
+    }
+
+    .auto-commit-line {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .consequence-line {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .card-btns {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid;
+      transition: all 0.15s;
+      letter-spacing: 0.2px;
+    }
+
+    .btn-commit {
+      background: rgba(34,197,94,0.1);
+      border-color: rgba(34,197,94,0.35);
+      color: var(--low);
+    }
+    .btn-commit:hover {
+      background: rgba(34,197,94,0.2);
+      border-color: var(--low);
+    }
+
+    .btn-rollback {
+      background: rgba(239,68,68,0.1);
+      border-color: rgba(239,68,68,0.35);
+      color: var(--high);
+    }
+    .btn-rollback:hover {
+      background: rgba(239,68,68,0.2);
+      border-color: var(--high);
+    }
+
+    /* ─── TRANSACTION LOG ─────────────────────────────────── */
+    .tx-log {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 680px;
+      overflow-y: auto;
+    }
+
+    .tx-log::-webkit-scrollbar { width: 4px; }
+    .tx-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .tx-log::-webkit-scrollbar-track { background: transparent; }
+
+    .tx-entry {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 13px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    .tx-entry { animation: fadeIn 0.2s ease; }
+
+    .tx-icon { font-size: 13px; margin-top: 1px; flex-shrink: 0; }
+
+    .tx-body { flex: 1; min-width: 0; }
+
+    .tx-action {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tx-action.committed { color: var(--low); }
+    .tx-action.rolledback { color: var(--high); }
+    .tx-action.auto { color: var(--text-dim); }
+
+    .tx-dest {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tx-prevented {
+      font-size: 11px;
+      color: var(--high);
+      margin-top: 4px;
+      padding: 4px 8px;
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.18);
+      border-radius: 4px;
+    }
+
+    .tx-time {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: monospace;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .tx-placeholder {
+      text-align: center;
+      padding: 28px;
+      color: var(--text-dim);
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+    }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────── */
+    @media (max-width: 880px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">↩</div>
+  <div class="header-text">
+    <h1>AgentUndo</h1>
+    <p>Commit / rollback safety net for irreversible AI agent actions</p>
+  </div>
+  <span class="series-badge">Agent Trust Layer · Build #8</span>
+</div>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="label">Pending Review</div>
+    <div class="value" id="stat-pending">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Committed</div>
+    <div class="value" id="stat-committed">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Rolled Back</div>
+    <div class="value" id="stat-rolledback">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Mistakes Prevented</div>
+    <div class="value" id="stat-saved">0</div>
+  </div>
+</div>
+
+<!-- SCENARIO TRIGGERS -->
+<div class="controls-section">
+  <div class="controls-label">Simulate AI agent requesting an action:</div>
+  <div class="controls-row">
+    <button class="scenario-btn" onclick="queue('email_blast')">
+      <span class="risk-dot" style="background:var(--high)"></span>Email blast · 500 recipients
+    </button>
+    <button class="scenario-btn" onclick="queue('delete_rows')">
+      <span class="risk-dot" style="background:var(--high)"></span>DELETE 2,412 DB rows
+    </button>
+    <button class="scenario-btn" onclick="queue('alter_table')">
+      <span class="risk-dot" style="background:var(--high)"></span>ALTER TABLE in production
+    </button>
+    <button class="scenario-btn" onclick="queue('slack_blast')">
+      <span class="risk-dot" style="background:var(--med)"></span>Post to #company-all
+    </button>
+    <button class="scenario-btn" onclick="queue('s3_delete')">
+      <span class="risk-dot" style="background:var(--med)"></span>Delete S3 bucket (12 GB)
+    </button>
+    <button class="scenario-btn" onclick="queue('webhook')">
+      <span class="risk-dot" style="background:var(--low)"></span>Trigger webhook
+    </button>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+
+  <!-- LEFT: Action Queue -->
+  <div>
+    <div class="section-title">
+      Action Queue
+      <span class="section-badge" id="queue-count">0 pending</span>
+    </div>
+    <div class="action-queue" id="action-queue">
+      <div class="empty-queue" id="empty-queue">
+        <div class="icon">🛡️</div>
+        <p>No pending actions.<br>Click a scenario above to simulate your AI agent requesting an action.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Transaction Log -->
+  <div>
+    <div class="section-title">
+      Transaction Log
+      <span class="section-badge" id="log-count">0 entries</span>
+    </div>
+    <div class="tx-log" id="tx-log">
+      <div class="tx-placeholder">Completed actions appear here</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── SCENARIOS ──────────────────────────────────────────────────────────
+const SCENARIOS = {
+  email_blast: {
+    icon: '📧', risk: 'high', timeout: 120,
+    type: 'Send Email Campaign',
+    dest: 'smtp → customer_list_q2.csv (500 recipients)',
+    payload:
+`To: customer_list_q2.csv (500 recipients)
+Subject: [URGENT] Your account action required
+Body: Personalized content + unsubscribe link
+Sender: noreply@company.com
+Scheduled: IMMEDIATE`,
+    consequence: 'Cannot unsend. 500 customers notified.'
+  },
+  delete_rows: {
+    icon: '🗑️', risk: 'high', timeout: 120,
+    type: 'DELETE database records',
+    dest: 'postgres://prod-db-01 → users.inactive_sessions',
+    payload:
+`DELETE FROM users.sessions
+WHERE last_active < NOW() - INTERVAL '90 days'
+  AND account_status = 'inactive'
+-- Matches: 2,412 rows
+-- Foreign keys: unchecked`,
+    consequence: '2,412 rows gone permanently. No backup scheduled.'
+  },
+  alter_table: {
+    icon: '🧬', risk: 'high', timeout: 120,
+    type: 'ALTER TABLE (schema migration)',
+    dest: 'postgres://prod-db-01 → public.orders (4.2M rows)',
+    payload:
+`ALTER TABLE public.orders
+  DROP COLUMN legacy_payment_ref,
+  ADD COLUMN stripe_payment_id VARCHAR(64),
+  ADD COLUMN refund_eligible BOOLEAN DEFAULT true;
+-- Estimated lock: 8–30s on 4.2M rows`,
+    consequence: 'Column drop irreversible. Lock during migration.'
+  },
+  slack_blast: {
+    icon: '💬', risk: 'med', timeout: 60,
+    type: 'Post to Slack channel',
+    dest: '#company-all (890 members)',
+    payload:
+`Channel: #company-all
+Text: "🚨 Q2 review deadlines are TODAY.
+All managers must submit by 5PM PST
+or HR will escalate immediately."
+Posted as: Aria Bot · Immediate`,
+    consequence: 'Undeletable after 24h. All 890 members notified.'
+  },
+  s3_delete: {
+    icon: '📁', risk: 'med', timeout: 60,
+    type: 'Delete files from storage',
+    dest: 's3://prod-assets/uploads/2025/',
+    payload:
+`Target: s3://prod-assets/uploads/2025/*.tmp
+Matched: 847 files (12.3 GB)
+Versioning: DISABLED on this bucket
+Confirm delete: true`,
+    consequence: '12.3 GB deleted. Versioning off — no recovery.'
+  },
+  webhook: {
+    icon: '🔔', risk: 'low', timeout: 30,
+    type: 'Trigger outbound webhook',
+    dest: 'https://hooks.partner-api.io/events/new-order',
+    payload:
+`POST https://hooks.partner-api.io/events/new-order
+{
+  "event": "order.created",
+  "order_id": "ord_9f3a1c",
+  "amount": 299.00,
+  "customer_id": "cust_7b2d8e"
+}`,
+    consequence: 'Partner workflow triggered. Order committed.'
+  }
+};
+
+// ─── STATE ──────────────────────────────────────────────────────────────
+let pending  = {};   // id → action obj
+let nextId   = 1;
+let stats    = { pending: 0, committed: 0, rolledback: 0, saved: 0 };
+let txLog    = [];
+const CIRC   = 2 * Math.PI * 19;  // r = 19
+
+// ─── QUEUE ACTION ────────────────────────────────────────────────────────
+function queue(key) {
+  const s   = SCENARIOS[key];
+  const id  = nextId++;
+  const now = Date.now();
+  const obj = { id, key, ...s, startTime: now, endsAt: now + s.timeout * 1000, tid: null };
+  pending[id] = obj;
+  stats.pending++;
+  renderCard(id);
+  updateStats();
+  obj.tid = setInterval(() => tick(id), 200);
+}
+
+// ─── TICK ────────────────────────────────────────────────────────────────
+function tick(id) {
+  const a = pending[id];
+  if (!a) return;
+  const rem = Math.max(0, a.endsAt - Date.now());
+  const ring  = document.getElementById('ring-' + id);
+  const label = document.getElementById('tlbl-' + id);
+  const info  = document.getElementById('tinfo-' + id);
+  if (!ring) return;
+  const secs = Math.ceil(rem / 1000);
+  ring.style.strokeDashoffset = CIRC * (1 - rem / (a.timeout * 1000));
+  label.textContent = secs + 's';
+  if (info) info.textContent = 'Auto-commits in ' + secs + 's';
+  if (rem < 10000) {
+    label.classList.add('urgent');
+    ring.style.stroke = '#ef4444';
+  }
+  if (rem <= 0) {
+    clearInterval(a.tid);
+    resolve(id, 'auto');
+  }
+}
+
+// ─── RESOLVE ─────────────────────────────────────────────────────────────
+function resolve(id, outcome) {
+  const a = pending[id];
+  if (!a) return;
+  clearInterval(a.tid);
+  const card = document.getElementById('card-' + id);
+  const cls  = (outcome === 'rolledback') ? 'flash-rollback' : 'flash-commit';
+  if (card) card.classList.add(cls);
+  setTimeout(() => {
+    delete pending[id];
+    stats.pending--;
+    if (outcome === 'rolledback') { stats.rolledback++; stats.saved++; }
+    else { stats.committed++; }
+    addLog(a, outcome);
+    removeCard(id);
+    updateStats();
+    updateQueueBadge();
+  }, 380);
+}
+
+// ─── DOM: RENDER CARD ────────────────────────────────────────────────────
+function renderCard(id) {
+  const a       = pending[id];
+  const secs    = a.timeout;
+  const rLabel  = { high: 'HIGH RISK', med: 'MEDIUM', low: 'LOW RISK' }[a.risk];
+  const queue   = document.getElementById('action-queue');
+  const empty   = document.getElementById('empty-queue');
+  if (queue.contains(empty)) queue.removeChild(empty);
+
+  const div = document.createElement('div');
+  div.id = 'card-' + id;
+  div.className = 'action-card risk-' + a.risk;
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="action-icon">${a.icon}</div>
+      <div class="action-meta">
+        <div class="action-type">${a.type}</div>
+        <div class="action-dest">${a.dest}</div>
+      </div>
+      <span class="risk-pill ${a.risk}">${rLabel}</span>
+    </div>
+    <div class="payload">${esc(a.payload)}</div>
+    <div class="card-footer">
+      <div class="timer-wrap">
+        <svg width="50" height="50" viewBox="0 0 50 50">
+          <circle class="ring-track" cx="25" cy="25" r="19"/>
+          <circle class="ring-fill" id="ring-${id}" cx="25" cy="25" r="19"
+            stroke-dasharray="${CIRC}"
+            stroke-dashoffset="0"/>
+        </svg>
+        <div class="timer-label" id="tlbl-${id}">${secs}s</div>
+      </div>
+      <div class="footer-info">
+        <div class="auto-commit-line" id="tinfo-${id}">Auto-commits in ${secs}s</div>
+        <div class="consequence-line">⚠️ ${a.consequence}</div>
+      </div>
+      <div class="card-btns">
+        <button class="btn btn-commit"   onclick="resolve(${id},'committed')">✓ Commit</button>
+        <button class="btn btn-rollback" onclick="resolve(${id},'rolledback')">✕ Rollback</button>
+      </div>
+    </div>
+  `;
+  queue.prepend(div);
+  updateQueueBadge();
+}
+
+function removeCard(id) {
+  const card = document.getElementById('card-' + id);
+  if (card) card.remove();
+  if (Object.keys(pending).length === 0) {
+    const queue = document.getElementById('action-queue');
+    const empty = document.getElementById('empty-queue');
+    queue.innerHTML = '';
+    queue.appendChild(empty);
+  }
+}
+
+function updateQueueBadge() {
+  const n = Object.keys(pending).length;
+  document.getElementById('queue-count').textContent = n + ' pending';
+}
+
+// ─── DOM: LOG ────────────────────────────────────────────────────────────
+function addLog(a, outcome) {
+  txLog.unshift({ a, outcome, time: new Date().toLocaleTimeString('en-US', { hour12: false }) });
+  renderLog();
+}
+
+function renderLog() {
+  const container = document.getElementById('tx-log');
+  const n = txLog.length;
+  document.getElementById('log-count').textContent = n + (n === 1 ? ' entry' : ' entries');
+
+  container.innerHTML = txLog.map(({ a, outcome, time }) => {
+    const isRolled = outcome === 'rolledback';
+    const isAuto   = outcome === 'auto';
+    const label    = isRolled ? 'Rolled back' : isAuto ? 'Auto-committed' : 'Committed';
+    const cls      = isRolled ? 'rolledback' : isAuto ? 'auto' : 'committed';
+    const icon     = isRolled ? '✕' : '✓';
+    const prevented = isRolled ? `<div class="tx-prevented">🛡 Blocked: ${a.consequence}</div>` : '';
+    return `
+      <div class="tx-entry">
+        <div class="tx-icon">${icon}</div>
+        <div class="tx-body">
+          <div class="tx-action ${cls}">${label}: ${a.type}</div>
+          <div class="tx-dest">${a.dest}</div>
+          ${prevented}
+        </div>
+        <div class="tx-time">${time}</div>
+      </div>`;
+  }).join('');
+}
+
+// ─── STATS ───────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-pending').textContent   = stats.pending;
+  document.getElementById('stat-committed').textContent = stats.committed;
+  document.getElementById('stat-rolledback').textContent = stats.rolledback;
+  document.getElementById('stat-saved').textContent     = stats.saved;
+}
+
+// ─── UTIL ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
